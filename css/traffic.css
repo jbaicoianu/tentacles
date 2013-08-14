@@ -1,0 +1,51 @@
+body {
+  margin: 0;
+  overflow: hidden;
+}
+.network_traffic {
+  width: 100%;
+  height: 100%;
+  font-family: arial, helvetica;
+}
+.network_traffic_trace {
+  position: fixed;
+  top: 0;
+  left: 0;
+  border: 1px solid black;
+  background: rgba(255,255,255,.5);
+}
+
+line.network_connection {
+  stroke: #000;
+  stroke-width: 1.5px;
+  stroke-opacity: .2;
+  pointer-events: none;
+}
+rect {
+  fill: none;
+  pointer-events: all;
+}
+g.network_host text.network_host_label {
+  font-size: .6em;
+  fill: black; 
+  opacity: .5;
+  top: 1em;
+  left: 1em;
+  -webkit-user-select: none;
+}
+g.network_host {
+  cursor: pointer;
+  z-index: 100;
+}
+.network_host circle {
+  fill: rgba(0,0,0,.5);
+}
+.network_host:hover circle {
+  fill: rgba(0,0,0,1);
+}
+g.network_host:hover text.network_host_label {
+  opacity: 1;
+}
+.network_host_type_self circle {
+  fill: red;
+}
