@@ -1,9 +1,9 @@
-Tentacles: Realtime Network Visualization Tool
-==============================================
+Tentacles
+=========
 
 What is it?
 -----------
-Tentacles is a tool for visualizing network traffic in realtime, allowing you to see what machines your computer or network is talking to at any given point in time, and whose networks your packets are traversing to get there.
+Tentacles is a tool for visualizing network traffic and routing in realtime, allowing you to see what machines your computer or network is talking to at any given point in time, and whose networks your packets are traversing to get there.
 
 What's it for?
 --------------
@@ -21,7 +21,7 @@ Tentacles runs a Python data collector on your server, which uses pcap to watch 
 
 Is it done?
 -----------
-Nope.  Tentacles is still a work in progress.  The web UI is roughly complete, but the server-side data collection needs work.
+Nope.  Tentacles is still a work in progress.  The web UI is roughly complete, but the server-side data collection is still under development.  Currently we're polling PHP to collect data, but when the Python collector is complete there will be no PHP dependency and data will be pushed via WebSockets.
 
 Who is responsible for this?
 ----------------------------
