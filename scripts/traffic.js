@@ -39,7 +39,8 @@ elation.component.add('network.traffic', function() {
     // create simple interface for performing traceroutes
     this.traceui = elation.html.create({tag: 'div', classname: 'network_traffic_trace', append: this.container});
     var traceinput = elation.html.create({tag: 'input', append: this.traceui});
-    elation.events.add(traceinput, 'change', elation.bind(this, this.handletrace));
+    elation.events.add(traceinput, 'change,keypress', elation.bind(this, this.handletrace));
+    traceinput.focus();
 
     // FIXME - instead of looking up hosts on an interval, we should be streaming this data via websockets
     setInterval(elation.bind(this, this.lookuphosts), this.lookuptime);
@@ -136,8 +137,8 @@ elation.component.add('network.traffic', function() {
       if (this.hostnodes.length == 1) {
         // Fix the first hostnode so the graph doesndoesn't rotate constantly
         this.hosts[address].fixed = true;
-        this.hosts[address].x = 100;
-        this.hosts[address].y = 20;
+        this.hosts[address].x = 20;
+        this.hosts[address].y = this.size[1] - 20;
       }
     }
     return this.hosts[address];
@@ -202,6 +203,7 @@ elation.component.add('network.traffic', function() {
    * Handle new inputs from the traceroute UI
    */
   this.handletrace = function(ev) {
+    if (ev.type == 'keypress' && ev.keyCode != '13') return;
     var input = ev.target;
     var host = input.value;
     this.tracehost(host);
