@@ -40,31 +40,17 @@ class Component_network extends Component {
   public function controller_trace($args) {
     if (!empty($args["host"])) {
       $host = $args["host"];
-      // old-style traceroute
-      /*
-      $lines = explode("\n", `traceroute -w 2 -q 1 -n $host |tail -n +2 |awk '{print $1 "," $2 "," $3}'`);
-      foreach ($lines as $line) {
-        $line = trim($line);
-        if (!empty($line)) {
-          list($num,$router,$latency) = explode(",", trim($line));
-          if ($router != "*") {
-            $vars["hops"][$host][$num] = array($router, $latency);
-          }
-        }
-      }
-      */
-      // traceroute using mtr gives much more reliable and stable results
-      $lines = explode("\n", `mtr -c 1 -n --raw $host`);
-      foreach ($lines as $line) {
-        $parts = explode(" ", trim($line));
-        switch ($parts[0]) {
-          case 'h':
-            $vars["hops"][$host][$parts[1]][0] = $parts[2];
-            break;
-          case 'p':
-            $vars["hops"][$host][$parts[1]][1] = $parts[2];
-            break;
-        }
+      $type = any($args["type"], "udp");
+      switch ($type) {
+        case 'tcp':
+          $vars["hops"] = LinuxNetwork::trace_tcp($host);
+          break;
+        case 'udp':
+          $vars["hops"] = LinuxNetwork::trace_udp($host);
+          break;
+        case 'icmp':
+          $vars["hops"] = LinuxNetwork::trace_icmp($host);
+          break;
       }
     }
     return $this->GetComponentResponse("./trace.tpl", $vars);
@@ -150,31 +136,36 @@ class NetworkAddress {
 }
 
 class LinuxNetwork {
+  public static $hostdevice = null;
+
   public static function get_hostname() {
     $hostname = trim(file_get_contents("/etc/hostname"));
     return $hostname;
   }
   public static function get_host_device() {
-    $device = new NetworkDevice(self::get_hostname());
-    $cmd = "ip addr show";
-    $cmdout = `$cmd`;
-    $lines = explode("\n", $cmdout);
-    $ifaces = array();
-    $currentiface = null;
-    for ($i = 0; $i < count($lines); $i++) {
-      if (preg_match("/^\d+: (.*?)(?:@.*?)?: <(.*?)> (.*)$/", $lines[$i], $m)) {
-        $currentiface = $m[1];
-        $device->add_interface($m[1]);
-      } else if (preg_match("/^\s+link\/(.*?) ([0-9a-f:]{17}) brd ([0-9a-f:]{17})/", $lines[$i], $m)) {
-        $device->interfaces[$currentiface]->set_link($m[1], $m[2], $m[3]);
-      } else if (preg_match("/^\s+inet ([\d\.]+)\/(\d+) (.*)$/", $lines[$i], $m)) {
-        $device->add_address($m[1], $m[2], $currentiface);
+    if (!self::$hostdevice) {
+      $device = new NetworkDevice(self::get_hostname());
+      $cmd = "ip addr show";
+      $cmdout = `$cmd`;
+      $lines = explode("\n", $cmdout);
+      $ifaces = array();
+      $currentiface = null;
+      for ($i = 0; $i < count($lines); $i++) {
+        if (preg_match("/^\d+: (.*?)(?:@.*?)?: <(.*?)> (.*)$/", $lines[$i], $m)) {
+          $currentiface = $m[1];
+          $device->add_interface($m[1]);
+        } else if (preg_match("/^\s+link\/(.*?) ([0-9a-f:]{17}) brd ([0-9a-f:]{17})/", $lines[$i], $m)) {
+          $device->interfaces[$currentiface]->set_link($m[1], $m[2], $m[3]);
+        } else if (preg_match("/^\s+inet ([\d\.]+)\/(\d+) (.*)$/", $lines[$i], $m)) {
+          $device->add_address($m[1], $m[2], $currentiface);
+        }
       }
+
+      self::get_interface_stats($device->interfaces);
+      self::$hostdevice = $device;
     }
 
-    self::get_interface_stats($device->interfaces);
-
-    return $device;
+    return self::$hostdevice;
   }
   public static function get_interface_stats($ifaces) {
     $file = "/proc/net/dev";
@@ -192,5 +183,83 @@ class LinuxNetwork {
     $cmd = "ip route show";
     $cmdout = `$cmd`;
     $lines = explode("\n", $cmdout);
+  }
+  public static function get_route_info($addr) {
+    $addr = gethostbyname($addr); // make sure we've got an address, not a hostname
+    $cmd = "ip route get $addr";
+    $cmdout = `$cmd`;
+    $lines = explode("\n", $cmdout);
+    $info = array();
+    if (substr($lines[0], 0, strlen($addr)) == $addr) {
+      $parts = explode(" ", substr($lines[0], strlen($addr) + 1));
+      for ($i = 0; $i < count($parts) - 1; $i++) {
+        if (empty($parts[$i])) continue;
+        $info[$parts[$i]] = $parts[++$i];
+      }
+    }
+
+    return $info;
+  }
+
+  /* various types of traceroute */
+  public static function trace_icmp($host) {
+    return self::trace_mtr($host, false);
+  }
+  public static function trace_udp($host) {
+    return self::trace_mtr($host, true);
+  }
+  public static function trace_tcp($host) {
+    return self::trace_traceroute($host, true);
+  }
+
+  protected function trace_traceroute($host, $tcp=false) {
+    // old-style traceroute
+    $hops = array();
+
+    // Inject our own src address as the first hop for completeness
+    $routeinfo = self::get_route_info($host);
+    $hops[$host][0] = array($routeinfo["src"], 0);
+
+    if ($tcp) {
+      $cmd = "tcptraceroute -w 2 -q 1 -n $host";
+    } else {
+      $cmd = "traceroute -w 2 -q 1 -n $host |tail -n +2";
+    }
+    $awkcmd = 'awk \'{print $1 "," $2 "," $3 "," $4}\'';
+    $lines = explode("\n", `$cmd | $awkcmd`);
+    foreach ($lines as $line) {
+      $line = trim($line);
+      if (!empty($line)) {
+        list($num,$router,$latency,$extra) = explode(",", trim($line));
+        if ($latency == "[open]") $latency = $extra;
+        if ($router != "*") {
+          $hops[$host][(int)$num] = array($router, $latency);
+        }
+      }
+    }
+    return $hops;
+  }
+  protected function trace_mtr($host, $udp=false) {
+    $hops = array();
+    // Inject our own src address as the first hop for completeness
+    $routeinfo = self::get_route_info($host);
+    $hops[$host][0] = array($routeinfo["src"], 0);
+
+    $tracecmd = "mtr -c 1 -n --raw $host";
+    if ($udp) $tracecmd .= " -u";
+
+    $lines = explode("\n", `$tracecmd`);
+    foreach ($lines as $line) {
+      $parts = explode(" ", trim($line));
+      switch ($parts[0]) {
+        case 'h':
+          $hops[$host][$parts[1]+1][0] = $parts[2];
+          break;
+        case 'p':
+          $hops[$host][$parts[1]+1][1] = $parts[2];
+          break;
+      }
+    }
+    return $hops;
   }
 }
