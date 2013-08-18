@@ -12,40 +12,78 @@ body {
   top: 0;
   left: 0;
   border: 1px solid black;
-  background: rgba(255,255,255,.5);
+  background-image: -webkit-linear-gradient(bottom, rgba(0,0,0,.8) 66%, rgba(64,64,64,.5) 98%);
+  background-image: -moz-linear-gradient(bottom, rgba(0,0,0,.8) 66%, rgba(64,64,64,.5) 98%);
+}
+.network_traffic_trace input {
+  background: #ccc;
+}
+.network_traffic_trace .network_trace_list {
+  color: white;
+  font-size: .8em;
+}
+#network_trace_iframe {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 line.network_connection {
-  stroke: #000;
-  stroke-width: 1.5px;
+  stroke: black;
+  stroke-width: 1px;
   stroke-opacity: .2;
   pointer-events: none;
 }
+line.network_connection.state_recent {
+  stroke: red;
+  stroke-width: 3px;
+}
+
 rect {
   fill: none;
   pointer-events: all;
 }
-g.network_host text.network_host_label {
+g.network_host text.network_host_label,
+g.network_host text.network_host_label_shadow {
   font-size: .6em;
-  fill: black; 
-  opacity: .5;
+  fill: #999; 
   top: 1em;
   left: 1em;
   -webkit-user-select: none;
 }
+
+g.network_host text.network_host_label_shadow {
+  fill: white;
+  stroke: white;
+  stroke-width: 2px;
+}
 g.network_host {
   cursor: pointer;
-  z-index: 100;
+}
+g.network_host:hover {
 }
 .network_host circle {
-  fill: rgba(0,0,0,.5);
+  fill: #999;
+  opacity: 1;
 }
 .network_host:hover circle {
-  fill: rgba(0,0,0,1);
+  opacity: 1;
+  fill: #000;
 }
 g.network_host:hover text.network_host_label {
   opacity: 1;
+  fill: #000;
 }
-.network_host_type_self circle {
-  fill: red;
+g.network_host.network_host_type_self text.network_host_label {
+  fill: #900;
+  opacity: 1;
+}
+g.network_host.network_host_type_self circle {
+  fill: #900;
+}
+g.network_host.network_host_type_self:hover text.network_host_label {
+  fill: #f00;
+}
+g.network_host.network_host_type_self:hover circle {
+  fill: #f00;
 }
