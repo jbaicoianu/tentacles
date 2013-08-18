@@ -1,3 +1,5 @@
+{dependency name="ui.treeview"}
+{dependency name="ui.select"}
 {dependency name="utils.dust"}
 {dependency name="utils.template"}
 {dependency name="network"}
@@ -8,4 +10,5 @@
   <elation:args>{jsonencode var=$data}</elation:args>
 </div>
 <div elation:component="network.traffic">
+  <elation:args name="addresses">{jsonencode var=$data.device->addresses}</elation:args>
 </div>
