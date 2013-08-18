@@ -4,8 +4,10 @@ elation.component.add('network.traffic', function() {
     this.size = [window.innerWidth, window.innerHeight];
     this.graphzoom = 1;
     this.graphoffset = [0, 0];
+    this.traces = {};
+
     // FIXME - these polling intervals won't be needed once websockets are hooked up
-    this.tracetime = 20000;
+    this.tracetime = 10000;
     this.lookuptime = 2000;
     this.fadetime = this.tracetime * 10;
 
@@ -33,14 +35,16 @@ elation.component.add('network.traffic', function() {
     elation.events.add(window, 'resize', this);
 
     this.self = [];
+    if (this.args.addresses) {
+      for (var k in this.args.addresses) {
+        this.self.push(k);
+      }
+    }
     this.connections = [];
     this.hosts = {};
 
     // create simple interface for performing traceroutes
-    this.traceui = elation.html.create({tag: 'div', classname: 'network_traffic_trace', append: this.container});
-    var traceinput = elation.html.create({tag: 'input', append: this.traceui});
-    elation.events.add(traceinput, 'change,keypress', elation.bind(this, this.handletrace));
-    traceinput.focus();
+    this.traceinit();
 
     // FIXME - instead of looking up hosts on an interval, we should be streaming this data via websockets
     setInterval(elation.bind(this, this.lookuphosts), this.lookuptime);
@@ -71,7 +75,7 @@ elation.component.add('network.traffic', function() {
           if (lasthop) {
             var prevhost = data.hops[host][lasthop][0];
             var conn = new elation.network.connection(this, {src: prevhost, dst: thishost});
-            this.links.push(conn);
+            this.links.unshift(conn);
           }
           lasthop = hop;
         }
@@ -79,7 +83,6 @@ elation.component.add('network.traffic', function() {
     }
     if (data.hosts) {
       for (var addr in data.hosts) {
-        console.log(addr, data.hosts[addr]);
         if (this.hosts[addr]) {
           this.hosts[addr].hostname = data.hosts[addr];
         }
@@ -90,13 +93,19 @@ elation.component.add('network.traffic', function() {
             .data(this.hostnodes, function(d) { return d.address; });
 
     var genter = gdata.enter().append("svg:g")
-            .attr("class", function(d) { console.log(d);  return "network_host" + (d.type ? " network_host_type_" + d.type : ""); })
+            .attr("class", function(d) { return "network_host" + (d.type ? " network_host_type_" + d.type : ""); })
             .attr("transform", function(d) { return "translate(" + d.x + ", " + d.y + ")"; });
     genter.append('svg:circle')
             .attr("r", 4.5)
+/*
+    genter.append("svg:text")
+            .attr("class", "network_host_label_shadow")
+            .attr("dx", 6)
+            .attr("dy", 3)
+            .text(function(d) { return d.hostname || d.address; });
+*/
     genter.append("svg:text")
             .attr("class", "network_host_label")
-            //.attr("id", elation.bind(this, function(d) { return this.hosts[d].address; }))
             .attr("dx", 6)
             .attr("dy", 3)
             .text(function(d) { return d.hostname || d.address; });
@@ -106,18 +115,23 @@ elation.component.add('network.traffic', function() {
     // Add network connection lines
     var linkdata = this.svg.selectAll("line.network_connection")
             .data(this.links);
+    // FIXME - inserting before :first-child makes lines appear below nodes, but then the state_recent links get out of sync
+    //linkdata.enter().insert("svg:line", ":first-child")
     linkdata.enter().append("svg:line")
-            .attr("class", "network_connection")
+            .attr("class", "network_connection state_recent")
             .attr("x1", function(d) { return d.src.x; })
             .attr("y1", function(d) { return d.src.y; })
             .attr("x2", function(d) { return d.dst.x; })
             .attr("y2", function(d) { return d.dst.y; })
     .transition()
+      .delay(this.tracetime)
+      .attr("class", "network_connection")
+    .transition()
       .delay(this.fadetime)
       .each("end", elation.bind(this, function() { var link = this.links.shift(); link.close(); }))
       .remove();
 
-    linkdata.exit().remove();
+    //linkdata.exit().remove();
 
     this.force.start();
   }
@@ -180,12 +194,45 @@ elation.component.add('network.traffic', function() {
       elation.ajax.Get('network/lookup.js?addrs=' + allhosts, null, {callback: elation.bind(this, function(d) { var response = JSON.parse(d); if (response.data) this.mergedata(response.data); })});
     }
   }
+  /** 
+   * trace UI setup
+   */
+  this.traceinit = function() {
+    this.traceui = elation.html.create({tag: 'form', classname: 'network_traffic_trace', append: this.container});
+    var traceframe = elation.html.create({tag: 'iframe', append: this.container});
+    traceframe.src = "javascript:false";
+    traceframe.id = "network_trace_iframe";
+    traceframe.name = "network_trace_iframe";
+    this.traceui.name = "network_trace";
+    this.traceui.autocomplete = "on";
+    this.traceui.target = "network_trace_iframe";
+    var traceinput = elation.html.create({tag: 'input', append: this.traceui});
+    traceinput.name = "host";
+    traceinput.placeholder = "Trace host";
+    //elation.events.add(traceinput, 'change,keypress', elation.bind(this, this.handletrace));
+    elation.events.add(this.traceui, 'submit', elation.bind(this, this.handletrace));
+    traceinput.focus();
+    this.tracetype = elation.ui.select(null, elation.html.create({tag: 'select', append: this.traceui}), {items: "icmp;tcp;udp", selected: "icmp"});
+
+    this.tracelist = elation.ui.treeview(null, elation.html.create({tag: 'div', classname: 'network_trace_list', append: this.traceui}), {
+      attrs: {
+        label: 'dst',
+        //visible: 'properties.pickable',
+        //itemtemplate: 'engine.systems.admin.scenetree.thing'
+      }
+    });
+  }
   /**
    * Ask server to traceroute host for us
    */
-  this.tracehost = function(host) {
-    // TODO - implement websocket streaming of this data
-    elation.ajax.Get('network/trace.js?host=' + host, null, {callback: elation.bind(this, function(d) { var response = JSON.parse(d); if (response.data) this.mergedata(response.data); })});
+  this.tracehost = function(host, time) {
+    if (!this.traces[host]) {
+      this.traces[host] = new elation.network.trace(this, {dst: host, tracetime: time});
+      this.tracelist.setItems(this.traces);
+    }
+    if (!this.traces[host].started) {
+      this.traces[host].poll();
+    }
   }
   /**
    * pan/zoom functions
@@ -203,16 +250,15 @@ elation.component.add('network.traffic', function() {
    * Handle new inputs from the traceroute UI
    */
   this.handletrace = function(ev) {
-    if (ev.type == 'keypress' && ev.keyCode != '13') return;
-    var input = ev.target;
+    // IE doesn't send onchange events when enter is pressed, so we use keypress and watch for \n instead
+    //if (ev.type == 'keypress' && ev.keyCode != '13') return;
+
+    var input = ev.target.host;
     var host = input.value;
     this.tracehost(host);
-    // TODO - with websocket implementation, we'll let the server pick the interval and it'll feed us updates
-    setInterval(elation.bind(this, function() {
-      this.tracehost(host);
-    }), this.tracetime);
-    input.value = '';
-    ev.preventDefault();
+
+    setTimeout(elation.bind(input, function() { this.value = ''; }), 10);
+    //ev.preventDefault();
   }
   /**
    * Handle resize events by making svg fit screen
@@ -309,6 +355,31 @@ elation.extend('network.connection', function(parent, args) {
   this.close = function() {
     this.src.disconnect(this.dst.address);
     this.dst.disconnect(this.src.address);
+  }
+  this.init();
+});
+elation.extend('network.trace', function(parent, args) {
+  this.init = function() {
+    this.src = args.src;
+    this.dst = args.dst;
+    this.type = args.type || "udp";
+    this.tracetime = args.tracetime || parent.tracetime;
+    this.stopped = false;
+    this.started = false;
+  }
+  this.poll = function() {
+    if (!this.stopped) {
+      // TODO - implement websocket streaming of this data
+      this.started = true;
+      setTimeout(elation.bind(this, this.poll), this.tracetime);
+      var type = parent.tracetype.value || this.type;
+      elation.ajax.Get('network/trace.js?host=' + this.dst + '&type=' + type, null, {
+        callback: elation.bind(parent, function(d) { 
+          var response = JSON.parse(d);
+          if (response.data) this.mergedata(response.data); 
+        })
+      });
+    }
   }
   this.init();
 });
