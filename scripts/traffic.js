@@ -11,7 +11,28 @@ elation.component.add('network.traffic', function() {
     this.lookuptime = 2000;
     this.fadetime = this.tracetime * 10;
 
-    // init force graph
+    this.initdata();
+    this.inittraceui();
+    this.initgraph();
+
+    // FIXME - instead of looking up hosts on an interval, we should be streaming this data via websockets
+    setInterval(elation.bind(this, this.lookuphosts), this.lookuptime);
+  }
+  this.initdata = function() {
+    this.self = [];
+    this.connections = [];
+    this.hosts = {};
+
+    if (this.args.addresses) {
+      for (var k in this.args.addresses) {
+        this.self.push(k);
+      }
+    }
+  }
+  /**
+   * init force graph
+   */
+  this.initgraph = function() {
     this.force = d3.layout.force()
         .linkDistance(40)
         .linkStrength(10)
@@ -33,22 +54,39 @@ elation.component.add('network.traffic', function() {
         .attr('height', this.size[1]);
     elation.events.add(this.svg[0][0], 'mousedown,mousewheel', this);
     elation.events.add(window, 'resize', this);
-
-    this.self = [];
-    if (this.args.addresses) {
-      for (var k in this.args.addresses) {
-        this.self.push(k);
-      }
-    }
-    this.connections = [];
-    this.hosts = {};
-
-    // create simple interface for performing traceroutes
-    this.traceinit();
-
-    // FIXME - instead of looking up hosts on an interval, we should be streaming this data via websockets
-    setInterval(elation.bind(this, this.lookuphosts), this.lookuptime);
   }
+  /** 
+   * trace UI setup
+   */
+  this.inittraceui = function() {
+    // Post to a hidden iframe so that autocomplete will still work
+    var traceframe = elation.html.create({tag: 'iframe', append: this.container});
+    traceframe.src = "javascript:false";
+    traceframe.id = "network_trace_iframe";
+    traceframe.name = "network_trace_iframe";
+    this.traceui = elation.html.create({tag: 'form', classname: 'network_traffic_trace', append: this.container});
+    this.traceui.action = 'javascript:false';
+    this.traceui.method = "GET";
+    this.traceui.name = "network_trace";
+    this.traceui.autocomplete = "off"; // FIXME - autocomplete is currently broken in chrome, hooray
+    this.traceui.target = "network_trace_iframe";
+    var traceinput = elation.html.create({tag: 'input', append: this.traceui});
+    traceinput.name = "host";
+    traceinput.placeholder = "Trace host";
+    //elation.events.add(traceinput, 'change,keypress', elation.bind(this, this.handletrace));
+    elation.events.add(this.traceui, 'submit', elation.bind(this, this.handletrace));
+    traceinput.focus();
+    this.tracetype = elation.ui.select(null, elation.html.create({tag: 'select', append: this.traceui}), {items: "icmp;tcp;udp", selected: "icmp"});
+
+    this.tracelist = elation.ui.treeview(null, elation.html.create({tag: 'div', classname: 'network_trace_list', append: this.traceui}), {
+      attrs: {
+        label: 'dst',
+        //visible: 'properties.pickable',
+        //itemtemplate: 'engine.systems.admin.scenetree.thing'
+      }
+    });
+  }
+
   /**
    * Add new data to the graph
    */
@@ -193,34 +231,6 @@ elation.component.add('network.traffic', function() {
       // TODO - implement websocket streaming of this data
       elation.ajax.Get('network/lookup.js?addrs=' + allhosts, null, {callback: elation.bind(this, function(d) { var response = JSON.parse(d); if (response.data) this.mergedata(response.data); })});
     }
-  }
-  /** 
-   * trace UI setup
-   */
-  this.traceinit = function() {
-    this.traceui = elation.html.create({tag: 'form', classname: 'network_traffic_trace', append: this.container});
-    var traceframe = elation.html.create({tag: 'iframe', append: this.container});
-    traceframe.src = "javascript:false";
-    traceframe.id = "network_trace_iframe";
-    traceframe.name = "network_trace_iframe";
-    this.traceui.name = "network_trace";
-    this.traceui.autocomplete = "on";
-    this.traceui.target = "network_trace_iframe";
-    var traceinput = elation.html.create({tag: 'input', append: this.traceui});
-    traceinput.name = "host";
-    traceinput.placeholder = "Trace host";
-    //elation.events.add(traceinput, 'change,keypress', elation.bind(this, this.handletrace));
-    elation.events.add(this.traceui, 'submit', elation.bind(this, this.handletrace));
-    traceinput.focus();
-    this.tracetype = elation.ui.select(null, elation.html.create({tag: 'select', append: this.traceui}), {items: "icmp;tcp;udp", selected: "icmp"});
-
-    this.tracelist = elation.ui.treeview(null, elation.html.create({tag: 'div', classname: 'network_trace_list', append: this.traceui}), {
-      attrs: {
-        label: 'dst',
-        //visible: 'properties.pickable',
-        //itemtemplate: 'engine.systems.admin.scenetree.thing'
-      }
-    });
   }
   /**
    * Ask server to traceroute host for us
