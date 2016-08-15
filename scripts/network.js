@@ -135,134 +135,143 @@
  */
 
 
-elation.template.add('network.device', '<h2>{host.name}</h2>');
-elation.template.add('network.interface', '<h2>{interface.name}</h2>');
-elation.template.add('network.address', '<h2>{address.ip}</h2>');
+elation.require(['utils.template'], function() {
+  elation.template.add('network.device', '<h2>{host.name}</h2>');
+  elation.template.add('network.interface', '<h2>{interface.name}</h2>');
+  elation.template.add('network.address', '<h2>{address.ip}</h2>');
 
-elation.component.add("network.explore", function() {
-  this.host = false;
-  this.networks = {};
-  this.peers = {};
+  elation.component.add("network.explore", function() {
+    this.host = false;
+    this.networks = {};
+    this.peers = {};
 
-  this.init = function() {
-    console.log('new fucker', this.args);
-    this.device = new elation.network.device(this.args.device);
-    for (var k in this.args.hosts) {
-      this.hosts[k] = new elation.network.device(this.args.hosts[k]);
-      var div = elation.html.create({classname: 'network_device'});
-      div.innerHTML = elation.template.get('network.device', {host: this.hosts[k]});
-      this.container.appendChild(div);
-    }
-  }
-  this.merge = function(data) {
-    if (data.networks) this.add_networks(data.networks);
-    if (data.peers) this.add_peers(data.peers);
-  }
-  this.add_networks = function(networks) {
-    for (var k in networks) {
-      this.networks[k] = new elation.network.subnet(networks[k]);
-    }
-  }
-});
-
-elation.extend("network.device", function(args) {
-  this.name = '(unknown)';
-  this.interfaces = {};
-  this.addresses = {};
-
-  this.init = function() {
-    this.name = args.name;
-    this.set_interfaces(args.interfaces);
-    this.set_addresses(args.addresses);
-  }
-
-  this.set_interfaces = function(interfaces) {
-    for (var k in interfaces) {
-      this.interfaces[k] = new elation.network.interface(interfaces[k]);
-    }
-  }
-  this.set_addresses = function(addresses) {
-    for (var k in addresses) {
-      this.addresses[k] = new elation.network.address(addresses[k]);
-    }
-  }
-  this.get_networks = function() {
-    var addrs = {};
-    for (var iface in this.interfaces) {
-      for (var link in this.interfaces[iface].links) {
-        for (var addr in this.interfaces[iface].links[link].addresses) {
-          addrs[addr] = this.interfaces[iface].links[link].addresses[addr];
-        }
+    this.init = function() {
+      console.log('new fucker', this.args);
+      this.device = new elation.network.device(this.args.device);
+  console.log(this.args);
+      for (var k in this.args.hosts) {
+        this.hosts[k] = new elation.network.device(this.args.hosts[k]);
+        var div = elation.html.create({classname: 'network_device'});
+        div.innerHTML = elation.template.get('network.device', {host: this.hosts[k]});
+        this.container.appendChild(div);
       }
     }
-    return addrs;
-  }
-  this.init();
-});
-elation.extend("network.interface", function(args) {
-  this.name = "(unknown)";
-  this.link = false;
-  this.addresses = {};
-  this.stats = {};
-
-  this.init = function() {
-    this.name = args.name;
-    this.set_link(args.link);
-    this.update_stats(args.stats);
-    this.set_addresses(args.addresses);
-    console.log('new interface: ' + this.name);
-  }
-  this.set_link = function(link) {
-    this.link = new elation.network.link(link);
-  }
-  this.set_addresses = function(addresses) {
-    for (var k in addresses) {
-      this.add_address(addresses[k]);
+    this.merge = function(data) {
+      if (data.networks) this.add_networks(data.networks);
+      if (data.peers) this.add_peers(data.peers);
     }
-  }
-  this.add_address = function(address) {
-    this.addresses[address.ip] = new elation.network.address(address);
-  }
-  this.update_stats = function(stats) {
-    this.stats = stats;
-  }
-  this.init();
-});
-elation.extend("network.subnet", function(args) {
-  this.address = false;
-  this.prefix = 0;
-
-  this.init = function() {
-    if (this.args.cidr) {
-      var parts = this.args.cidr.split('/');
-      this.address = parts[0];
-      this.prefix = parts[1];
-    } else {
-      this.address = args.address;
-      this.prefix = args.prefix;
+    this.add_networks = function(networks) {
+      for (var k in networks) {
+        this.networks[k] = new elation.network.subnet(networks[k]);
+      }
     }
-    console.log('new subnet: ' + this.address + '/' + this.prefix);
-  }
-  this.getmask = function() {
-    return -1 << (32 - this.prefix);
-  }
-  this.init();
-});
-elation.extend("network.link", function(args) {
-  this.mac = "(unknown)";
+  });
 
-  this.init = function() {
-    this.mac = args.mac;
-  }
-  this.init();
-});
-elation.extend("network.address", function(args) {
-  this.ip = "(unknown)";
-  this.network = 32;
+  elation.extend("network.device", function(args) {
+    this.name = '(unknown)';
+    this.interfaces = {};
+    this.addresses = {};
 
-  this.init = function() {
-    this.ip = args.ip;
-    this.network = args.network;
-  }
-  this.init();
+    this.init = function() {
+      this.name = args.name;
+      this.set_interfaces(args.interfaces);
+      this.set_addresses(args.addresses);
+    }
+
+    this.set_interfaces = function(interfaces) {
+      for (var k in interfaces) {
+        this.interfaces[k] = new elation.network.interface(interfaces[k]);
+      }
+    }
+    this.set_addresses = function(addresses) {
+      for (var k in addresses) {
+        this.addresses[k] = new elation.network.address(addresses[k]);
+      }
+    }
+    this.get_networks = function() {
+      var addrs = {};
+      for (var iface in this.interfaces) {
+        for (var link in this.interfaces[iface].links) {
+          for (var addr in this.interfaces[iface].links[link].addresses) {
+            addrs[addr] = this.interfaces[iface].links[link].addresses[addr];
+          }
+        }
+      }
+      return addrs;
+    }
+    this.init();
+  });
+  elation.extend("network.interface", function(args) {
+    this.name = "(unknown)";
+    this.link = false;
+    this.addresses = {};
+    this.stats = {};
+
+    this.init = function() {
+      this.name = args.name;
+      if (args.link) {
+        this.set_link(args.link);
+      }
+      if (args.stats) {
+        this.update_stats(args.stats);
+      }
+      if (args.addresses) {
+        this.set_addresses(args.addresses);
+      }
+      console.log('new interface: ' + this.name);
+    }
+    this.set_link = function(link) {
+      this.link = new elation.network.link(link);
+    }
+    this.set_addresses = function(addresses) {
+      for (var k in addresses) {
+        this.add_address(addresses[k]);
+      }
+    }
+    this.add_address = function(address) {
+      this.addresses[address.ip] = new elation.network.address(address);
+    }
+    this.update_stats = function(stats) {
+      this.stats = stats;
+    }
+    this.init();
+  });
+  elation.extend("network.subnet", function(args) {
+    this.address = false;
+    this.prefix = 0;
+
+    this.init = function() {
+      if (this.args.cidr) {
+        var parts = this.args.cidr.split('/');
+        this.address = parts[0];
+        this.prefix = parts[1];
+      } else {
+        this.address = args.address;
+        this.prefix = args.prefix;
+      }
+      console.log('new subnet: ' + this.address + '/' + this.prefix);
+    }
+    this.getmask = function() {
+      return -1 << (32 - this.prefix);
+    }
+    this.init();
+  });
+  elation.extend("network.link", function(args) {
+    this.mac = "(unknown)";
+
+    this.init = function() {
+      this.mac = args.mac;
+    }
+    this.init();
+  });
+  elation.extend("network.address", function(args) {
+    this.ip = "(unknown)";
+    this.network = 32;
+
+    this.init = function() {
+      this.ip = args.ip;
+      this.network = args.network;
+    }
+    this.init();
+  });
 });

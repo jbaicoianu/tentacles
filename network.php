@@ -10,6 +10,7 @@ class Component_network extends Component {
 
     $vars["data"]["device"] = LinuxNetwork::get_host_device();
     $vars["data"]["networks"] = LinuxNetwork::get_networks();
+    $vars["data"]["remote"] = $_SERVER["REMOTE_ADDR"];
 
     return $this->GetComponentResponse("./network.tpl", $vars);
   }
@@ -54,6 +55,31 @@ class Component_network extends Component {
       }
     }
     return $this->GetComponentResponse("./trace.tpl", $vars);
+  }
+  public function controller_subnet($args) {
+    $ip = $args["ip"];
+    $url = "http://whois.arin.net/rest/nets;q={$ip}?showDetails=true&showARIN=false";
+
+    $opts = array(
+      'http'=>array(
+        'method'=>"GET",
+        'header'=>"Accept: application/json\r\n"
+      )
+    );
+
+    $context = stream_context_create($opts);
+    $file = file_get_contents($url, false, $context);
+    $data = json_decode($file);
+    $net = (is_array($data->nets->net) ? $data->nets->net[0] : $data->nets->net);
+    $netblock = (is_array($net->netBlocks->netBlock) ? $net->netBlocks->netBlock[0] : $net->netBlocks->netBlock);
+    $subnet["address"] = $netblock->startAddress->{'$'};
+    $subnet["prefix"] = $netblock->cidrLength->{'$'};
+    $subnet["owner"] = $net->orgRef->{'@name'};
+    $vars["subnet"] = $subnet;
+    return $this->GetComponentResponse("./subnet.tpl", $vars);
+  }
+  public function controller_self() {
+    return $this->GetComponentResponse("./self.tpl", $_SERVER);
   }
 }  
 

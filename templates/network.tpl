@@ -6,9 +6,9 @@
 {dependency name="network.d3"}
 {dependency name="network.traffic"}
 
-<div elation:component="network.explore">
-  <elation:args>{jsonencode var=$data}</elation:args>
+<div data-elation-component="network.explore">
+  <data class="elation-args">{jsonencode var=$data}</data>
 </div>
-<div elation:component="network.traffic">
-  <elation:args name="addresses">{jsonencode var=$data.device->addresses}</elation:args>
+<div data-elation-component="network.traffic">
+  <data class="elation-args" name="addresses">{jsonencode var=$data.device->addresses}</data>
 </div>
